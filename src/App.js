@@ -132,11 +132,11 @@ function App() {
       <form onSubmit={handleSubmit} style={{ marginBottom: '20px' }}>
         <div>
           <label>Nom :</label>
-          <input type="text" name="nom" value={formData.nom} onChange={handleChange} required />
+          <input type="text" name="nom" value={formData.nom} onChange={handleChange} />
         </div>
         <div>
           <label>Prénom :</label>
-          <input type="text" name="prenom" value={formData.prenom} onChange={handleChange} required />
+          <input type="text" name="prenom" value={formData.prenom} onChange={handleChange} />
         </div>
         <div>
           <label>Email :</label>

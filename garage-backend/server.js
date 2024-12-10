@@ -2,14 +2,40 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
+const mongoose = require('mongoose');
 const app = express();
+const fs = require('fs');
+
+// Vérifie si le dossier 'uploads' existe, sinon il le crée
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+    console.log('Dossier "uploads" créé avec succès');
+}
 
 // Configuration de CORS
 const corsOptions = {
-    origin: 'http://localhost:3000', // Autorise les requêtes du frontend
+    origin: 'http://localhost:3001', // Autorise les requêtes du frontend
     methods: ['GET', 'POST', 'PUT', 'DELETE'], // Méthodes autorisées
     allowedHeaders: ['Content-Type'], // En-têtes autorisés
 };
+
+mongoose.connect('mongodb://localhost:27017/nomDeTaBase', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+})
+    .then(() => console.log('Connexion à MongoDB réussie !'))
+    .catch(err => console.error('Erreur de connexion à MongoDB :', err));
+
+// Définition du modèle "Client"
+const clientSchema = new mongoose.Schema({
+    nom: String,
+    email: String,
+    téléphone: String,
+    // Ajouter d'autres champs si nécessaire
+});
+
+const Client = mongoose.model('Client', clientSchema); // Crée le modèle basé sur le schéma
 
 app.use(cors(corsOptions)); // Applique les options CORS
 app.use(express.json()); // Middleware pour parser les données JSON
@@ -35,10 +61,10 @@ const upload = multer({
     },
 });
 
-// Exemple de route : récupérer les clients depuis une base réelle
+// Exemple de route : récupérer les clients depuis la base MongoDB
 app.get('/api/clients', async (req, res) => {
     try {
-        const clients = await db.collection('clients').find().toArray();
+        const clients = await Client.find(); // Utilisation de Mongoose pour récupérer les clients
         res.json(clients);
     } catch (error) {
         res.status(500).json({ message: 'Erreur serveur', error });
@@ -48,8 +74,8 @@ app.get('/api/clients', async (req, res) => {
 // Exemple de route : ajouter un client avec un fichier
 app.post('/api/clients', async (req, res) => {
     try {
-        const newClient = req.body; // Récupère les données envoyées
-        await db.collection('clients').insertOne(newClient); // Insère dans la base
+        const newClient = new Client(req.body); // Crée une instance du modèle Client avec les données envoyées
+        await newClient.save(); // Enregistre le client dans la base de données
         res.status(201).json(newClient); // Répond avec le nouveau client
     } catch (error) {
         res.status(500).json({ message: 'Erreur serveur', error });
