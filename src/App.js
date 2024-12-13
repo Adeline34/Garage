@@ -13,12 +13,12 @@ function App() {
     devis: { numero: '', date: '', montantTotal: '', travaux: '', etat: 'en attente' },
     preferences: { contact: 'email', paiement: 'CB' },
   });
-  const [file, setFile] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
 
   // Récupérer la liste des clients
   useEffect(() => {
-    axios.get('http://localhost:5000/api/clients')
+    axios
+      .get('http://localhost:5000/api/clients')
       .then((response) => setClients(response.data))
       .catch((error) => console.error('Erreur de chargement :', error));
   }, []);
@@ -42,19 +42,17 @@ function App() {
     }
   };
 
-  // Gérer les changements du fichier
-  const handleFileChange = (e) => setFile(e.target.files[0]);
-
   // Gérer l'envoi du formulaire
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Soumission du formulaire :", formData);
+
     try {
-      let response;
       if (editingClient) {
-        response = await axios.put(`http://localhost:5000/api/clients/${editingClient._id}`, formData);
+        // Mise à jour d'un client existant
+        await axios.put(`http://localhost:5000/api/clients/${editingClient._id}`, formData);
       } else {
-        response = await axios.post('http://localhost:5000/api/clients', formData);
+        // Création d'un nouveau client
+        await axios.post('http://localhost:5000/api/clients', formData);
       }
 
       // Recharger la liste des clients
@@ -62,7 +60,6 @@ function App() {
       setClients(updatedClients.data);
 
       // Réinitialiser le formulaire
-      setFile(null);
       setFormData({
         nom: '',
         prenom: '',
@@ -75,7 +72,7 @@ function App() {
       });
       setEditingClient(null);
     } catch (error) {
-      console.error("Erreur lors de l'ajout ou de la mise à jour :", error);
+      console.error('Erreur lors de l\'ajout ou de la mise à jour :', error);
     }
   };
 
@@ -87,8 +84,12 @@ function App() {
 
   // Supprimer un client
   const handleDelete = async (id) => {
-    await axios.delete(`http://localhost:5000/api/clients/${id}`);
-    setClients(clients.filter(client => client._id !== id)); // Supprime le client de la liste locale
+    try {
+      await axios.delete(`http://localhost:5000/api/clients/${id}`);
+      setClients(clients.filter((client) => client._id !== id));
+    } catch (error) {
+      console.error('Erreur lors de la suppression :', error);
+    }
   };
 
   return (
@@ -137,9 +138,11 @@ function App() {
         </div>
         <div>
           <label>Adresse</label>
-          <input
+          <textarea
             type="text"
             name="adresse"
+            rows="4" // Ajustez le nombre de lignes par défaut
+            style={{ resize: 'both', overflow: 'auto' }} // Permet à l'utilisateur de redimensionner le champ
             value={formData.adresse}
             onChange={handleChange}
           />
@@ -215,11 +218,12 @@ function App() {
             onChange={handleChange}
           />
           <label>Détails des travaux</label>
-          <input
-            type="text"
+          <textarea
             name="devis.travaux"
             value={formData.devis.travaux}
             onChange={handleChange}
+            rows="4" // Ajustez le nombre de lignes par défaut
+            style={{ resize: 'both', overflow: 'auto' }} // Permet à l'utilisateur de redimensionner le champ
           />
           <label>État</label>
           <select
@@ -257,20 +261,12 @@ function App() {
           </select>
         </div>
 
-        <div>
-          <label>Ajouter un fichier</label>
-          <input
-            type="file"
-            onChange={handleFileChange}
-          />
-        </div>
-
         <button type="submit">{editingClient ? 'Mettre à jour' : 'Ajouter Client'}</button>
       </form>
 
       <h2>Liste des Clients</h2>
       <ul>
-        {clients.map(client => (
+        {clients.map((client) => (
           <li key={client._id}>
             <h3>{client.nom} {client.prenom}</h3>
             <p>Email: {client.email}</p>
