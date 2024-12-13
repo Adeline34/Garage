@@ -9,47 +9,32 @@ function App() {
     email: '',
     telephone: '',
     adresse: '',
-    historique: [],
-    vehicule: {
-      marque: '',
-      modele: '',
-      immatriculation: '',
-      anneeFabrication: '',
-      kilometrage: '',
-      dateControleTechnique: '',
-    },
-    devis: {
-      numero: '',
-      date: '',
-      montantTotal: '',
-      travaux: '',
-      etat: 'en attente', // en attente, accepté, refusé
-    },
-    preferences: {
-      contact: 'email', // email, téléphone, SMS
-      paiement: 'CB', // CB, chèque, espèces
-    },
+    vehicule: { marque: '', modele: '', immatriculation: '', anneeFabrication: '', kilometrage: '', dateControleTechnique: '' },
+    devis: { numero: '', date: '', montantTotal: '', travaux: '', etat: 'en attente' },
+    preferences: { contact: 'email', paiement: 'CB' },
   });
-
+  const [file, setFile] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
-  const [file, setFile] = useState(null); // Ajouter l'état pour le fichier
 
+  // Récupérer la liste des clients
   useEffect(() => {
-    axios
-      .get('http://localhost:5000/api/clients')
+    axios.get('http://localhost:5000/api/clients')
       .then((response) => setClients(response.data))
       .catch((error) => console.error('Erreur de chargement :', error));
   }, []);
 
+  // Gérer les changements dans le formulaire
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    // Vérifier si le champ est imbriqué (par exemple "vehicule.marque")
     if (name.includes('.')) {
-      const [main, sub] = name.split('.');
+      const [parent, child] = name.split('.');
       setFormData({
         ...formData,
-        [main]: {
-          ...formData[main],
-          [sub]: value,
+        [parent]: {
+          ...formData[parent],
+          [child]: value,
         },
       });
     } else {
@@ -57,150 +42,242 @@ function App() {
     }
   };
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-  };
+  // Gérer les changements du fichier
+  const handleFileChange = (e) => setFile(e.target.files[0]);
 
+  // Gérer l'envoi du formulaire
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Upload du fichier si sélectionné
-    if (file) {
-      const formDataFile = new FormData();
-      formDataFile.append('file', file);
-
-      try {
-        const response = await axios.post('http://localhost:5000/api/upload', formDataFile, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        console.log('Fichier téléchargé avec succès', response.data);
-      } catch (error) {
-        console.error('Erreur lors du téléchargement du fichier', error);
+    console.log("Soumission du formulaire :", formData);
+    try {
+      let response;
+      if (editingClient) {
+        response = await axios.put(`http://localhost:5000/api/clients/${editingClient._id}`, formData);
+      } else {
+        response = await axios.post('http://localhost:5000/api/clients', formData);
       }
-    }
 
-    // Ajout ou modification du client
-    if (editingClient) {
-      axios
-        .put(`http://localhost:5000/api/clients/${editingClient.id}`, formData)
-        .then((response) => {
-          setClients(clients.map((client) =>
-            client.id === editingClient.id ? response.data : client
-          ));
-          setEditingClient(null);
-          setFormData({
-            nom: '', prenom: '', email: '', telephone: '', adresse: '', historique: [],
-            vehicule: { marque: '', modele: '', immatriculation: '', anneeFabrication: '', kilometrage: '', dateControleTechnique: '' },
-            devis: { numero: '', date: '', montantTotal: '', travaux: '', etat: 'en attente' },
-            preferences: { contact: 'email', paiement: 'CB' },
-          });
-        })
-        .catch((error) => alert('Erreur lors de la modification :', error));
-    } else {
-      axios
-        .post('http://localhost:5000/api/clients', formData)
-        .then((response) => {
-          setClients([...clients, { ...formData, id: response.data.id || Date.now() }]);
-          setFormData({
-            nom: '', prenom: '', email: '', telephone: '', adresse: '', historique: [],
-            vehicule: { marque: '', modele: '', immatriculation: '', anneeFabrication: '', kilometrage: '', dateControleTechnique: '' },
-            devis: { numero: '', date: '', montantTotal: '', travaux: '', etat: 'en attente' },
-            preferences: { contact: 'email', paiement: 'CB' },
-          });
-        })
-        .catch((error) => alert('Erreur lors de l’ajout :', error));
+      // Recharger la liste des clients
+      const updatedClients = await axios.get('http://localhost:5000/api/clients');
+      setClients(updatedClients.data);
+
+      // Réinitialiser le formulaire
+      setFile(null);
+      setFormData({
+        nom: '',
+        prenom: '',
+        email: '',
+        telephone: '',
+        adresse: '',
+        vehicule: { marque: '', modele: '', immatriculation: '', anneeFabrication: '', kilometrage: '', dateControleTechnique: '' },
+        devis: { numero: '', date: '', montantTotal: '', travaux: '', etat: 'en attente' },
+        preferences: { contact: 'email', paiement: 'CB' },
+      });
+      setEditingClient(null);
+    } catch (error) {
+      console.error("Erreur lors de l'ajout ou de la mise à jour :", error);
     }
   };
 
-  const handleDelete = (id) => {
-    axios
-      .delete(`http://localhost:5000/api/clients/${id}`)
-      .then(() => setClients(clients.filter((client) => client.id !== id)))
-      .catch((error) => alert('Erreur lors de la suppression :', error));
-  };
-
+  // Sélectionner un client à modifier
   const handleEdit = (client) => {
     setEditingClient(client);
     setFormData(client);
   };
 
+  // Supprimer un client
+  const handleDelete = async (id) => {
+    await axios.delete(`http://localhost:5000/api/clients/${id}`);
+    setClients(clients.filter(client => client._id !== id)); // Supprime le client de la liste locale
+  };
+
   return (
-    <div style={{ padding: '20px' }}>
+    <div>
       <h1>Gestion des Clients</h1>
-      <form onSubmit={handleSubmit} style={{ marginBottom: '20px' }}>
+      <form onSubmit={handleSubmit}>
         <div>
-          <label>Nom :</label>
-          <input type="text" name="nom" value={formData.nom} onChange={handleChange} />
+          <label>Nom</label>
+          <input
+            type="text"
+            name="nom"
+            value={formData.nom}
+            onChange={handleChange}
+            required
+          />
         </div>
         <div>
-          <label>Prénom :</label>
-          <input type="text" name="prenom" value={formData.prenom} onChange={handleChange} />
+          <label>Prénom</label>
+          <input
+            type="text"
+            name="prenom"
+            value={formData.prenom}
+            onChange={handleChange}
+            required
+          />
         </div>
         <div>
-          <label>Email :</label>
-          <input type="email" name="email" value={formData.email} onChange={handleChange} />
+          <label>Email</label>
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+          />
         </div>
         <div>
-          <label>Téléphone :</label>
-          <input type="text" name="telephone" value={formData.telephone} onChange={handleChange} />
+          <label>Téléphone</label>
+          <input
+            type="text"
+            name="telephone"
+            value={formData.telephone}
+            onChange={handleChange}
+            required
+          />
         </div>
         <div>
-          <label>Adresse Postale :</label>
-          <input type="text" name="adresse" value={formData.adresse} onChange={handleChange} />
+          <label>Adresse</label>
+          <input
+            type="text"
+            name="adresse"
+            value={formData.adresse}
+            onChange={handleChange}
+          />
         </div>
+
         <div>
-          <h3>Informations Véhicule</h3>
-          <label>Marque :</label>
-          <input type="text" name="vehicule.marque" value={formData.vehicule.marque} onChange={handleChange} />
-          <label>Modèle :</label>
-          <input type="text" name="vehicule.modele" value={formData.vehicule.modele} onChange={handleChange} />
-          <label>Immatriculation :</label>
-          <input type="text" name="vehicule.immatriculation" value={formData.vehicule.immatriculation} onChange={handleChange} />
-          <label>Année de Fabrication :</label>
-          <input type="number" name="vehicule.anneeFabrication" value={formData.vehicule.anneeFabrication} onChange={handleChange} />
-          <label>Kilométrage :</label>
-          <input type="number" name="vehicule.kilometrage" value={formData.vehicule.kilometrage} onChange={handleChange} />
-          <label>Date du dernier contrôle technique :</label>
-          <input type="date" name="vehicule.dateControleTechnique" value={formData.vehicule.dateControleTechnique} onChange={handleChange} />
+          <h3>Informations du véhicule</h3>
+          <label>Marque</label>
+          <input
+            type="text"
+            name="vehicule.marque"
+            value={formData.vehicule.marque}
+            onChange={handleChange}
+          />
+          <label>Modèle</label>
+          <input
+            type="text"
+            name="vehicule.modele"
+            value={formData.vehicule.modele}
+            onChange={handleChange}
+          />
+          <label>Immatriculation</label>
+          <input
+            type="text"
+            name="vehicule.immatriculation"
+            value={formData.vehicule.immatriculation}
+            onChange={handleChange}
+          />
+          <label>Année de fabrication</label>
+          <input
+            type="text"
+            name="vehicule.anneeFabrication"
+            value={formData.vehicule.anneeFabrication}
+            onChange={handleChange}
+          />
+          <label>Kilométrage</label>
+          <input
+            type="number"
+            name="vehicule.kilometrage"
+            value={formData.vehicule.kilometrage}
+            onChange={handleChange}
+          />
+          <label>Date du dernier contrôle technique</label>
+          <input
+            type="date"
+            name="vehicule.dateControleTechnique"
+            value={formData.vehicule.dateControleTechnique}
+            onChange={handleChange}
+          />
         </div>
+
         <div>
           <h3>Devis</h3>
-          <label>Numéro :</label>
-          <input type="text" name="devis.numero" value={formData.devis.numero} onChange={handleChange} />
-          <label>Date :</label>
-          <input type="date" name="devis.date" value={formData.devis.date} onChange={handleChange} />
-          <label>Montant Total :</label>
-          <input type="number" name="devis.montantTotal" value={formData.devis.montantTotal} onChange={handleChange} />
-          <label>Travaux :</label>
-          <textarea name="devis.travaux" value={formData.devis.travaux} onChange={handleChange}></textarea>
-          <label>État :</label>
-          <select name="devis.etat" value={formData.devis.etat} onChange={handleChange}>
+          <label>Numéro</label>
+          <input
+            type="text"
+            name="devis.numero"
+            value={formData.devis.numero}
+            onChange={handleChange}
+          />
+          <label>Date</label>
+          <input
+            type="date"
+            name="devis.date"
+            value={formData.devis.date}
+            onChange={handleChange}
+          />
+          <label>Montant total</label>
+          <input
+            type="number"
+            name="devis.montantTotal"
+            value={formData.devis.montantTotal}
+            onChange={handleChange}
+          />
+          <label>Détails des travaux</label>
+          <input
+            type="text"
+            name="devis.travaux"
+            value={formData.devis.travaux}
+            onChange={handleChange}
+          />
+          <label>État</label>
+          <select
+            name="devis.etat"
+            value={formData.devis.etat}
+            onChange={handleChange}
+          >
             <option value="en attente">En attente</option>
             <option value="accepté">Accepté</option>
             <option value="refusé">Refusé</option>
           </select>
         </div>
+
         <div>
-          <h3>Ajouter un fichier :</h3>
-          <input type="file" onChange={handleFileChange} />
+          <h3>Préférences</h3>
+          <label>Contact</label>
+          <select
+            name="preferences.contact"
+            value={formData.preferences.contact}
+            onChange={handleChange}
+          >
+            <option value="email">Email</option>
+            <option value="telephone">Téléphone</option>
+            <option value="sms">SMS</option>
+          </select>
+          <label>Mode de paiement</label>
+          <select
+            name="preferences.paiement"
+            value={formData.preferences.paiement}
+            onChange={handleChange}
+          >
+            <option value="CB">CB</option>
+            <option value="cheque">Chèque</option>
+            <option value="especes">Espèces</option>
+          </select>
         </div>
-        <button type="submit">{editingClient ? 'Modifier le client' : 'Ajouter un client'}</button>
-        {editingClient && (
-          <button type="button" onClick={() => setEditingClient(null)}>Annuler</button>
-        )}
+
+        <div>
+          <label>Ajouter un fichier</label>
+          <input
+            type="file"
+            onChange={handleFileChange}
+          />
+        </div>
+
+        <button type="submit">{editingClient ? 'Mettre à jour' : 'Ajouter Client'}</button>
       </form>
+
       <h2>Liste des Clients</h2>
       <ul>
-        {clients.map((client) => (
-          <li key={client.id}>
-            <strong>{client.nom} {client.prenom}</strong> - {client.email} - {client.telephone}
-            <p>{client.adresse}</p>
-            <h4>Véhicule :</h4>
-            <p>{client.vehicule.marque} - {client.vehicule.modele} - {client.vehicule.immatriculation}</p>
+        {clients.map(client => (
+          <li key={client._id}>
+            <h3>{client.nom} {client.prenom}</h3>
+            <p>Email: {client.email}</p>
+            <p>Téléphone: {client.telephone}</p>
+            <p>Adresse: {client.adresse}</p>
             <button onClick={() => handleEdit(client)}>Modifier</button>
-            <button onClick={() => handleDelete(client.id)}>Supprimer</button>
+            <button onClick={() => handleDelete(client._id)}>Supprimer</button>
           </li>
         ))}
       </ul>

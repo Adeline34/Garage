@@ -3,8 +3,9 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const mongoose = require('mongoose');
-const app = express();
 const fs = require('fs');
+
+const app = express();
 
 // Vérifie si le dossier 'uploads' existe, sinon il le crée
 const uploadDir = path.join(__dirname, 'uploads');
@@ -15,12 +16,13 @@ if (!fs.existsSync(uploadDir)) {
 
 // Configuration de CORS
 const corsOptions = {
-    origin: 'http://localhost:3001', // Autorise les requêtes du frontend
+    origin: 'http://localhost:3000', // Autorise les requêtes du frontend
     methods: ['GET', 'POST', 'PUT', 'DELETE'], // Méthodes autorisées
     allowedHeaders: ['Content-Type'], // En-têtes autorisés
 };
 
-mongoose.connect('mongodb://localhost:27017/nomDeTaBase', {
+// Connexion à MongoDB
+mongoose.connect('mongodb://localhost:27017/gestion_clients', {
     useNewUrlParser: true,
     useUnifiedTopology: true
 })
@@ -30,9 +32,31 @@ mongoose.connect('mongodb://localhost:27017/nomDeTaBase', {
 // Définition du modèle "Client"
 const clientSchema = new mongoose.Schema({
     nom: String,
+    prenom: String,
     email: String,
-    téléphone: String,
-    // Ajouter d'autres champs si nécessaire
+    telephone: String,
+    adresse: String,
+    historique: Array,
+    vehicule: {
+        marque: String,
+        modele: String,
+        immatriculation: String,
+        anneeFabrication: String,
+        kilometrage: Number,
+        dateControleTechnique: String,
+    },
+    devis: {
+        numero: String,
+        date: String,
+        montantTotal: Number,
+        travaux: String,
+        etat: { type: String, default: 'en attente' }, // en attente, accepté, refusé
+    },
+    preferences: {
+        contact: String, // email, téléphone, SMS
+        paiement: String, // CB, chèque, espèces
+    },
+    fichier: String, // Stocke le chemin du fichier téléchargé
 });
 
 const Client = mongoose.model('Client', clientSchema); // Crée le modèle basé sur le schéma
@@ -53,7 +77,7 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage,
     fileFilter: (req, file, cb) => {
-        const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']; // Ajoute ici les types valides
+        const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']; // Types de fichiers autorisés
         if (!allowedTypes.includes(file.mimetype)) {
             return cb(new Error('Fichier non valide'), false);
         }
@@ -61,39 +85,74 @@ const upload = multer({
     },
 });
 
-// Exemple de route : récupérer les clients depuis la base MongoDB
+// Routes Backend
 app.get('/api/clients', async (req, res) => {
     try {
-        const clients = await Client.find(); // Utilisation de Mongoose pour récupérer les clients
+        const clients = await Client.find(); // Récupère tous les clients
         res.json(clients);
     } catch (error) {
         res.status(500).json({ message: 'Erreur serveur', error });
     }
 });
 
-// Exemple de route : ajouter un client avec un fichier
 app.post('/api/clients', async (req, res) => {
     try {
-        const newClient = new Client(req.body); // Crée une instance du modèle Client avec les données envoyées
-        await newClient.save(); // Enregistre le client dans la base de données
-        res.status(201).json(newClient); // Répond avec le nouveau client
+        const newClient = new Client(req.body); // Crée un nouveau client
+        await newClient.save(); // Sauvegarde dans MongoDB
+        res.status(201).json(newClient);
     } catch (error) {
         res.status(500).json({ message: 'Erreur serveur', error });
     }
 });
 
-// Route pour télécharger un fichier (par exemple, un devis ou une carte grise)
-app.post('/api/upload', upload.single('file'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).send('Aucun fichier téléchargé');
+app.put('/api/clients/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updatedClient = await Client.findByIdAndUpdate(id, req.body, { new: true });
+        if (!updatedClient) {
+            return res.status(404).json({ message: 'Client non trouvé' });
+        }
+        res.json(updatedClient);
+    } catch (error) {
+        res.status(500).json({ message: 'Erreur serveur', error });
     }
-    res.status(200).json({
-        message: 'Fichier téléchargé avec succès',
-        filePath: req.file.path, // Le chemin du fichier sur le serveur
-    });
 });
 
-// Serveur en écoute
+app.delete('/api/clients/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await Client.findByIdAndDelete(id);
+        res.status(200).json({ message: 'Client supprimé avec succès' });
+    } catch (error) {
+        res.status(500).json({ message: 'Erreur serveur', error });
+    }
+});
+
+app.post('/api/upload/:id', upload.single('file'), async (req, res) => {
+    const { id } = req.params;
+
+    if (!req.file) {
+        return res.status(400).json({ message: 'Aucun fichier fourni' });
+    }
+
+    try {
+        const client = await Client.findById(id);
+
+        if (!client) {
+            return res.status(404).json({ message: 'Client non trouvé' });
+        }
+
+        // Ajoute le chemin du fichier au client
+        client.fichier = req.file.filename;
+        await client.save();
+
+        res.status(200).json({ message: 'Fichier téléchargé avec succès', fichier: req.file.filename });
+    } catch (error) {
+        res.status(500).json({ message: 'Erreur serveur', error });
+    }
+});
+
+// Démarrage du serveur
 const port = 5000;
 app.listen(port, () => {
     console.log(`Serveur démarré sur http://localhost:${port}`);
